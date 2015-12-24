@@ -5,35 +5,78 @@
 #include <iostream>
 #include <string>
 #include <boost/foreach.hpp>
+#include <opencv2/opencv.hpp>
+#include <math.h>
+#include <fstream>
 
 namespace fs = boost::filesystem;
 using namespace std;
 
-const fs::path INPUT_PATH("dataset");
-const fs::path OUTPUT_PATH("output");
+string ImageToString(cv::Mat& image, string& output, const int LEVEL);
 
-int main() {
-	boost::system::error_code error;
-	BOOST_FOREACH(const fs::path& p, std::make_pair(fs::recursive_directory_iterator(INPUT_PATH),
+int main(int argc, char* argv[]) {
+	//第一引数(argv[1])→データセットのディレクトリパス
+	//第二引数(argv[2])→出力ディレクトリのパス
+
+	//設定ここから
+	const fs::path INPUT_PATH(argv[1]);
+	const fs::path OUTPUT_PATH(argv[2]);
+	const int QUANTIZED_LEVEL = 125;//量子化レベル（LEVELの３乗根に量子化）通常{8,27,64,125}を利用する
+	//設定ここまで
+
+	//データセットディレクトリの中身を再帰的に（すべてのファイルを）調べる
+	BOOST_FOREACH(const fs::path& p, make_pair(fs::recursive_directory_iterator(INPUT_PATH),
 					fs::recursive_directory_iterator())) {
 		if (!fs::is_directory(p)) {
+
+			string file_extension = p.extension().string();
+
 			//それぞれのファイルに対する操作
+			if (file_extension == ".jpg" || file_extension == ".gif") {
 
-			//もしもoutputフォルダにクラスフォルダがなかったら作成する
-			fs::path output_class_dir(OUTPUT_PATH / p.parent_path().stem());
-			if (!fs::exists(output_class_dir)) {
-				fs::create_directories(output_class_dir);
-			}
+				cout << p << endl;
 
-			cout << "class:" << p.parent_path().stem() << "\n";
-			cout << p.filename() << endl;
-			fs::path output_file_path(output_class_dir / p.filename());
-			try {
-				fs::copy_file(p, output_file_path,boost::filesystem::copy_option::overwrite_if_exists);
-			} catch (fs::filesystem_error& ex) {
-				std::cout << ex.what() << std::endl;
-				throw;
+				cv::Mat input_image = cv::imread(p.string());
+
+				//もしもoutputフォルダにクラスフォルダがなかったら作成する　ここから
+				fs::path output_class_dir(OUTPUT_PATH / p.parent_path().stem());// "/"はパスの連結演算子
+
+				if (!fs::exists(output_class_dir)) {
+					fs::create_directories(output_class_dir);
+				}
+				//ここまで
+
+				string output;
+				ImageToString(input_image, output, QUANTIZED_LEVEL);
+
+				string output_txt_dir = output_class_dir.string() + "/"
+						+ p.stem().string() + ".txt";
+				std::ofstream ofs(output_txt_dir);
+				ofs << output;
+				ofs.close();
 			}
 		}
 	}
+	cout << "finish" << endl;
+	return 0;
+}
+/***
+ * @brief 水平スキャンで画像をテキストに変換
+ * @note char型の配列を予め確保しておくなどして高速化したほうがいいかも
+ * @param image 入力画像
+ * @param LEVEL 量子化レベル
+ * @return テキスト
+ */
+string ImageToString(cv::Mat& image, string& output, const int LEVEL) {
+	int q = 255.0 / pow(LEVEL, 1.0 / 3.0);
+	for (int y = 0; y < image.rows; ++y) {
+		for (int x = 0; x < image.cols; ++x) {
+			cv::Vec3b bgr = image.at<cv::Vec3b>(y, x);
+			int rgb[3] = { 2, 0, 1 };
+			for (int i : rgb) {
+				output += (char) ((double) (bgr[i] / q) + 1); // \0 はヌル文字なので出現しないように+1している
+			}
+		}
+	}
+	return output;
 }
