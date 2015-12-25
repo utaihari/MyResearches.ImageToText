@@ -21,7 +21,7 @@ int main(int argc, char* argv[]) {
 	//設定ここから
 	const fs::path INPUT_PATH(argv[1]);
 	const fs::path OUTPUT_PATH(argv[2]);
-	const int QUANTIZED_LEVEL = 125;//量子化レベル（LEVELの３乗根に量子化）通常{8,27,64,125}を利用する
+	const int QUANTIZED_LEVEL = 8;//量子化レベル（LEVELの３乗根に量子化）通常{8,27,64,125}を利用する
 	//設定ここまで
 
 	//データセットディレクトリの中身を再帰的に（すべてのファイルを）調べる
@@ -68,14 +68,19 @@ int main(int argc, char* argv[]) {
  * @return テキスト
  */
 string ImageToString(cv::Mat& image, string& output, const int LEVEL) {
+	cv::Mat lab_image;
+	cv::cvtColor(image, lab_image, CV_BGR2Lab);
+
 	int q = 255.0 / pow(LEVEL, 1.0 / 3.0);
-	for (int y = 0; y < image.rows; ++y) {
-		for (int x = 0; x < image.cols; ++x) {
-			cv::Vec3b bgr = image.at<cv::Vec3b>(y, x);
-			int rgb[3] = { 2, 0, 1 };
-			for (int i : rgb) {
-				output += (char) ((double) (bgr[i] / q) + 1); // \0 はヌル文字なので出現しないように+1している
+	for (int y = 0; y < lab_image.rows; ++y) {
+		for (int x = 0; x < lab_image.cols; ++x) {
+			cv::Vec3b lab = lab_image.at<cv::Vec3b>(y, x);
+			char lab_char[3];
+			for (int i = 0; i < 3; ++i) {
+				lab_char[i] = (char)((lab[i] - 1) / q);
 			}
+			output += (char) ((double) (lab_char[0] * q * q)
+					+ (double) (lab_char[1] * q) + (double) (lab_char[2]) + 1); // \0 はヌル文字なので出現しないように+1している :255→-1
 		}
 	}
 	return output;
