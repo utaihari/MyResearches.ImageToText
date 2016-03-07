@@ -21,7 +21,7 @@ int main(int argc, char* argv[]) {
 	//設定ここから
 	const fs::path INPUT_PATH(argv[1]);
 	const fs::path OUTPUT_PATH(argv[2]);
-	const int QUANTIZED_LEVEL = 125;//量子化レベル（LEVELの３乗根に量子化）通常{8,27,64,125}を利用する
+	const int QUANTIZED_LEVEL = 3;	//量子化レベル（LEVELの３乗に量子化）通常{2,3,4,5}を利用する
 	//設定ここまで
 
 	//データセットディレクトリの中身を再帰的に（すべてのファイルを）調べる
@@ -32,7 +32,8 @@ int main(int argc, char* argv[]) {
 			string file_extension = p.extension().string();
 
 			//それぞれのファイルに対する操作
-			if (file_extension == ".jpg" || file_extension == ".gif") {
+			if (file_extension == ".jpg" || file_extension == ".gif"
+					|| file_extension == ".png") {
 
 				//処理中の画像ファイル名の出力
 				cout << p << endl;
@@ -50,7 +51,8 @@ int main(int argc, char* argv[]) {
 
 				//出力用のテキスト配列を確保（１画素が１文字になるのでサイズはinput_image.rows * input_image.cols）
 				unsigned char* output;
-				output = new unsigned char[input_image.rows * input_image.cols];
+				output = new unsigned char[input_image.rows * input_image.cols
+						+ 1];
 
 				//メインの処理
 				ImageToString(input_image, output, QUANTIZED_LEVEL);
@@ -78,20 +80,36 @@ int main(int argc, char* argv[]) {
  * @param output 戻り値
  */
 void ImageToString(cv::Mat& image, unsigned char* output, const int LEVEL) {
-	cv::Mat lab_image;
-	cv::cvtColor(image, lab_image, CV_BGR2Lab);//rgb -> Lab
+	//cv::Mat rgb_image;
+	//cv::cvtColor(image, rgb_image, CV_BGR2Lab);	//rgb -> Lab
 
-	int each_level =  (int)pow(LEVEL, 1.0 / 3.0);//Labそれぞれの要素の量子化レベルはLEVELの３乗根
-	int q = ceil(255.0 / each_level) ;
+	int q = ceil(255.0 / LEVEL);
 
-	for (int y = 0; y < lab_image.rows; ++y) {
-		for (int x = 0; x < lab_image.cols; ++x) {
-			cv::Vec3b lab = lab_image.at<cv::Vec3b>(y, x);
-			unsigned char lab_char[3];
+	for (int y = 0; y < image.rows; ++y) {
+		for (int x = 0; x < image.cols; ++x) {
+			cv::Vec3b rgb = image.at<cv::Vec3b>(y, x);
+			unsigned char rgb_char[3];
+
 			for (int i = 0; i < 3; ++i) {
-				lab_char[i] = (unsigned char)((lab[i] - 1) / q);//量子化
+				rgb_char[i] = (unsigned char) ((rgb[i] - 1) / q);	//量子化
 			}
-			output[x + lab_image.cols * y] = (unsigned char)((lab_char[0] *pow(each_level,2)) + (lab_char[1] * each_level) + (lab_char[2]) + 1) ; // \0 はヌル文字なので出現しないように+1している :255→-1
+
+			unsigned char c = (unsigned char) ((rgb_char[0] * pow(LEVEL, 2))
+					+ (rgb_char[1] * LEVEL) + (rgb_char[2]));
+
+			//'10' = LF
+			if (c == 10) {
+				c = pow(LEVEL, 3) + 1;
+			}
+			//'13' = CR
+			else if (c == 13) {
+				c = pow(LEVEL, 3) + 2;
+			} else if (c == 0) {
+				c = pow(LEVEL, 3) + 3;
+			}
+			output[x + image.cols * y] = c;
+			// \0 はヌル文字なので出現しないようにしている
 		}
 	}
+	output[image.rows * image.cols] = '\0';
 }
