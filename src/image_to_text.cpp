@@ -21,7 +21,7 @@ int main(int argc, char* argv[]) {
 	//設定ここから
 	const fs::path INPUT_PATH(argv[1]);
 	const fs::path OUTPUT_PATH(argv[2]);
-	const int QUANTIZED_LEVEL = 3;	//量子化レベル（LEVELの３乗に量子化）通常{2,3,4,5}を利用する
+	const int QUANTIZED_LEVEL = 5;	//量子化レベル（LEVELの３乗に量子化）通常{2,3,4,5}を利用する
 	//設定ここまで
 
 	//データセットディレクトリの中身を再帰的に（すべてのファイルを）調べる
@@ -41,8 +41,14 @@ int main(int argc, char* argv[]) {
 				//画像ファイルの読み込み
 				cv::Mat input_image = cv::imread(p.string());
 
+				//保存先フォルダの作成
+				string output_dir = p.string();
+				output_dir.erase(output_dir.begin(),
+						output_dir.begin() + INPUT_PATH.string().length());
+
 				//もしもoutputフォルダにクラスフォルダがなかったら作成する　ここから
-				fs::path output_class_dir(OUTPUT_PATH / p.parent_path().stem());// "/"はパスの連結演算子
+				fs::path output_class_dir(
+						OUTPUT_PATH / fs::path(output_dir).parent_path());// "/"はパスの連結演算子
 
 				if (!fs::exists(output_class_dir)) {
 					fs::create_directories(output_class_dir);
@@ -93,20 +99,18 @@ void ImageToString(cv::Mat& image, unsigned char* output, const int LEVEL) {
 			for (int i = 0; i < 3; ++i) {
 				rgb_char[i] = (unsigned char) ((rgb[i] - 1) / q);	//量子化
 			}
-
 			unsigned char c = (unsigned char) ((rgb_char[0] * pow(LEVEL, 2))
-					+ (rgb_char[1] * LEVEL) + (rgb_char[2]));
+					+ (rgb_char[1] * LEVEL) + (rgb_char[2]) + 1);
 
-			//'10' = LF
-			if (c == 10) {
-				c = pow(LEVEL, 3) + 1;
-			}
-			//'13' = CR
-			else if (c == 13) {
-				c = pow(LEVEL, 3) + 2;
-			} else if (c == 0) {
-				c = pow(LEVEL, 3) + 3;
-			}
+//			//'10' = LF
+//			if (c == 10) {
+//				c = 1;
+//			}
+//			//'13' = CR
+//			else if (c == 13) {
+//				c = 2;
+//			}
+
 			output[x + image.cols * y] = c;
 			// \0 はヌル文字なので出現しないようにしている
 		}
